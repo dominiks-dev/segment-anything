@@ -1,0 +1,16 @@
+mal eine rauchen
+!Mal_E1n3_R8uch3n!
+
+
+Install SAM: 
+
+conda install pytorch torchvision torchaudio cpuonly -c pytorch
+
+#try: --> successfull
+conda install -c conda-forge segment-anything
+
+# conda install opencv-python pycocotools matplotlib onnxruntime onnx
+# --> opencv-python is not stabile and no anaconda package 
+# this worked: 
+ 
+conda install opencv pycocotools matplotlib onnxruntime onnx -c conda-forge
