@@ -106,7 +106,7 @@ def run_export(
 ):
     import os
     cwd = os.getcwd()
-    print("current directory = ", cwd) # DS: change the path in the launch.json file
+    print("current directory = ", cwd)  # DS: change the path in the launch.json file
     print("Loading model...")
     sam = sam_model_registry[model_type](checkpoint=checkpoint)
 
@@ -144,8 +144,8 @@ def run_export(
     output_names = ["masks", "iou_predictions", "low_res_masks"]
 
     with warnings.catch_warnings():
-        # warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
-        # warnings.filterwarnings("ignore", category=UserWarning)
+        warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
+        warnings.filterwarnings("ignore", category=UserWarning)
         with open(output, "wb") as f:
             print(f"Exporting onnx model to {output}...")
             torch.onnx.export(
@@ -176,8 +176,8 @@ def to_numpy(tensor):
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    # DS: adapt output name: 
-    if (args.output == None or args.output == "OnnxModelOut"):
+    # DS: adapt output name:
+    if (args.output is None or args.output == "OnnxModelOut"):
         args.output = args.model_type + "_onnx"
 
     run_export(
