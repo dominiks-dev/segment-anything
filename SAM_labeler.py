@@ -87,7 +87,8 @@ class SamData():
    def __init__(self, image_path) -> None:
       self.sam_checkpoint = "sam_vit_b_01ec64.pth"  # min model 0.37gb
       self.model_type = "vit_b"   
-      self.image_path = "A:/datasets/ProQuaOpt/2023-03-14 11_13_43_area.png"
+      # self.image_path = "A:/datasets/ProQuaOpt/2023-03-14 11_13_43_area.png"
+      self.image_path = "A:/TrainingsDaten/ProQuaOpt/SnowFox/RGB/2023-03-14 11_13_43_area.png"
 
       self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
       self.sam = sam_model_registry[self.model_type](checkpoint=self.sam_checkpoint)
@@ -95,7 +96,7 @@ class SamData():
 
       self.predictor = SamPredictor(self.sam)
       if(image_path!=None):
-         self.load_image_CV(image_path)
+         self.load_image_CV(self.image_path)
       
 
    def load_image_CV(self, image_path): 

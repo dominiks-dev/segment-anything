@@ -15,7 +15,9 @@ sam_checkpoint = "sam_vit_b_01ec64.pth"  # min model 0.37gb
 model_type = "vit_b"  
 
 # image_path = "G:/Pytorch/KI/truck1.png"
-image_path = "A:/datasets/ProQuaOpt/2023-03-14 11_13_43_area.png"
+# image_path = "A:/datasets/ProQuaOpt/2023-03-14 11_13_43_area.png"
+image_path = "A:/TrainingsDaten/ProQuaOpt/SnowFox/RGB/2023-03-14 11_13_43_area.png"
+image_path = "A:/TrainingsDaten/ProQuaOpt/SnowFox/RGB/NIO_shortshot/5.bmp"
 # image_path = "A:/datasets/ProQuaOpt/test10__2023-06-20 09_27_20.png"
 
 # device = "cuda"
@@ -45,7 +47,7 @@ def show_mask_dict(mask, ax, random_color=False):
     # h, w = mask.shape[-2:]
     mask_image = mask['segmentation'].reshape(h, w, 1) * color.reshape(1, 1, -1)
     ax.imshow(mask_image)  
-def show_mask(mask, ax, random_color=False):
+def show_mask(mask, ax, random_color=True):
     if random_color:
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
     else:
@@ -109,6 +111,7 @@ if (segEntireImage):
     plt.axis('off')
     plt.show() 
 
+
 segInputLabel=True
 # A) to generate a mask
 if (segInputLabel):
@@ -122,7 +125,7 @@ if (segInputLabel):
     # masks, _, _ = predictor.predict(<input_prompts>)
 
     # set parameters for input: 
-    input_point = np.array([[500, 375], [1125, 625]])
+    input_point = np.array([[488, 607], [1125, 625]])
     input_label = np.array([1, 1])
     masks, scores, logits = predictor.predict(
         point_coords=input_point,
