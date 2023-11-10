@@ -1,7 +1,3 @@
-mal eine rauchen
-!Mal_E1n3_R8uch3n!
-
-
 Install SAM: 
 
 conda install pytorch torchvision torchaudio cpuonly -c pytorch
@@ -14,3 +10,4 @@ conda install -c conda-forge segment-anything
 # this worked: 
  
 conda install opencv pycocotools matplotlib onnxruntime onnx -c conda-forge
+ 
