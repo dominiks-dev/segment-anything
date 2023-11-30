@@ -3,19 +3,19 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QMen
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QImage, QKeySequence
 from PyQt5.QtCore import Qt, QPoint, pyqtSignal
 
-def show_mask(mask, ax, random_color=False):
-    if random_color:
-        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
-    else:
-        color = np.array([30/255, 144/255, 255/255, 0.6])
-    h, w = mask.shape[-2:]
-    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-    ax.imshow(mask_image)
-def show_points(coords, labels, ax, marker_size=375):
-    pos_points = coords[labels==1]
-    neg_points = coords[labels==0]
-    ax.scatter(pos_points[:, 0], pos_points[:, 1], color='green', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
-    ax.scatter(neg_points[:, 0], neg_points[:, 1], color='red', marker='*', s=marker_size, edgecolor='white', linewidth=1.25) 
+# def show_mask(mask, ax, random_color=False):
+#     if random_color:
+#         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+#     else:
+#         color = np.array([30/255, 144/255, 255/255, 0.6])
+#     h, w = mask.shape[-2:]
+#     mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
+#     ax.imshow(mask_image)
+# def show_points(coords, labels, ax, marker_size=375):
+#     pos_points = coords[labels==1]
+#     neg_points = coords[labels==0]
+#     ax.scatter(pos_points[:, 0], pos_points[:, 1], color='green', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
+#     ax.scatter(neg_points[:, 0], neg_points[:, 1], color='red', marker='*', s=marker_size, edgecolor='white', linewidth=1.25) 
 def cv_image_to_qimage(cv_image):
    height, width, channel = cv_image.shape
    bytes_per_line = 3 * width
@@ -40,11 +40,33 @@ class ImageWidget(QLabel):
       self.modified_image = self.image.copy()  # Create a copy to hold the modifications
       self.setPixmap(self.image)
 
+   def resizeEvent(self, event):
+      # Scale the image to fit the new size while maintaining aspect ratio
+      self.modified_image = self.image.scaled(self.size(), Qt.KeepAspectRatio)
+      self.setPixmap(QPixmap(self.modified_image))
+
    def mousePressEvent(self, event):
       if event.button() == Qt.LeftButton:
-         # Get the click position in the image coordinates
+         # The current pixmap size
+         pixmap_size = self.pixmap().size()
+
+         # Calculate the scale factors
+         scale_width = pixmap_size.width() / self.image.width()
+         scale_height = pixmap_size.height() / self.image.height()
+
+         # Get the click position in the widget's coordinates
          click_pos = event.pos()
-         image_pos = self.mapFrom(self, click_pos)
+
+         # Adjust for centering/margins (if any)
+         # Assuming the image is centered in the label
+         offset_x = (self.width() - pixmap_size.width()) / 2
+         offset_y = (self.height() - pixmap_size.height()) / 2
+
+         # Adjust the click position to the image's scale
+         image_x = int((click_pos.x() - offset_x) / scale_width)
+         image_y = int((click_pos.y() - offset_y) / scale_height)
+         image_pos = QPoint(image_x, image_y)# Get the click position in the widget's coordinates
+         click_pos = event.pos()
 
          # Emit the clicked point through a signal
          self.clickedPoint.emit(image_pos)        
@@ -53,9 +75,11 @@ class ImageWidget(QLabel):
          painter = QPainter(self.modified_image)
          painter.setPen(QPen(Qt.red, 5))
          painter.drawPoint(image_pos)
+         painter.end()
  
          # Update the displayed image with the modified image
          self.setPixmap(self.modified_image)
+
       elif event.button() == Qt.MiddleButton: 
          self.startSam.emit()
 
@@ -67,6 +91,7 @@ class ImageWidget(QLabel):
          # Emit the clicked point through a signal
          point = QPoint(-1, -1)
          self.clickedPoint.emit(point) 
+
    def display_cv_image(self, cv_image):
       
       # Convert OpenCV image to QImage
@@ -81,28 +106,32 @@ import numpy as np
 import torch # has to be outside of sam class
 import matplotlib.pyplot as plt
 import cv2 
+import os
+
 #TODO: refactor to seperate file
 class SamData(): 
 
    def __init__(self, image_path) -> None:
       self.sam_checkpoint = "sam_vit_b_01ec64.pth"  # min model 0.37gb
       self.model_type = "vit_b"   
-      # self.image_path = "A:/datasets/ProQuaOpt/2023-03-14 11_13_43_area.png"
-      self.image_path = "A:/TrainingsDaten/ProQuaOpt/SnowFox/RGB/2023-03-14 11_13_43_area.png"
+      # check if there are images in the default path - if not load default 
+      if(image_path==None):
+         self.image_path = "sled.png"
+      else: 
+         self.image_path=image_path
 
       self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
       self.sam = sam_model_registry[self.model_type](checkpoint=self.sam_checkpoint)
       self.sam.to(device=self.device)
 
-      self.predictor = SamPredictor(self.sam)
-      if(image_path!=None):
-         self.load_image_CV(self.image_path)
-      
+      self.predictor = SamPredictor(self.sam)      
+      self.load_image_CV(self.image_path)
+         
 
    def load_image_CV(self, image_path): 
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) 
-    self.image = image # DS: only temp TODO: remove
+   #  self.image = image # DS: only temp TODO: remove
 
     # Pass loaded image through to predictor
     self.predictor.set_image(image)
@@ -113,7 +142,9 @@ class SamData():
       # need shape (1, m, n)
       # input_points= np.expand_dims(input_points_dy, axis=0)
       # input_label = np.array([1, 1, 1])
-      input_label = np.ones(input_points.shape[0])
+      if (len(input_points) == 0): 
+         return
+      input_label = np.ones(input_points.shape[0]) # only one class
       masks, scores, logits = self.predictor.predict(
          point_coords=input_points,
          point_labels=input_label,
@@ -121,29 +152,31 @@ class SamData():
         ) 
       return (masks, scores) 
 
-# setup basic variables
-# sam_checkpoint = "sam_vit_h_4b8939.pth" # max model 2,5gb
-# model_type = "vit_h" 
-# sam_checkpoint = "sam_vit_l_0b3195.pth" # middle model 1,2gb
-# model_type = "vit_l" 
+
 
 class MainWindow(QMainWindow):
-   def __init__(self, default_img):
+   def __init__(self, default_folder= "C:/Users/zinst/Pictures"):
       super().__init__()
-      self.default_img= default_img
+      self.img_folder = default_folder
+      self.image_list = [f for f in os.listdir(self.img_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp'))]
+      if (len(self.image_list) == 0): 
+         self.img_path = "sled.png"
+      else: 
+         self.img_path = os.path.join(self.img_folder, self.image_list[0]) 
+         self.index= 0
       self.initUI()
       # Connect the custom signal from ImageWidget to a slot in MainWindow
       self.image_widget.clickedPoint.connect(self.handle_clicked_point)
       self.image_widget.startSam.connect(self.segment_points)
       self.points=[]
-      self.samData=SamData(default_img) # input default image
+      self.samData=SamData( self.img_path) # input default image
 
    def initUI(self):
       self.setWindowTitle("Image Viewer")
       self.setGeometry(100, 100, 500, 400)
 
       # Create a custom ImageWidget as the central widget
-      self.image_widget = ImageWidget(self.default_img)
+      self.image_widget = ImageWidget(self.img_path)
       self.setCentralWidget(self.image_widget)
 
       # Create a menu bar
@@ -203,11 +236,13 @@ class MainWindow(QMainWindow):
 
    def segment_points(self): 
       pts = self.points
+      if (len(self.points)==0):
+         return
       # set the points as input label and get the mask from sam 
       mask, score = self.samData.predict_point_inputs(self.points)
 
       # merge mask and original image
-      alpha = 0.5
+      alpha = 0.6
       beta = (1.0 - alpha) 
       im2 = self.samData.image
       # color = np.array([30/255, 144/255, 255/255, 0.6])
@@ -252,11 +287,12 @@ class MainWindow(QMainWindow):
    def handle_dropdown_selection(self):
       action = self.sender()
       if action:
-         print("Selected option:", action.text())
+         print("Selected option:", action.text)
+
+
 
 if __name__ == "__main__":
    app = QApplication(sys.argv)
-   default_img="2023-03-14 11_13_43_area.png"
-   window = MainWindow(default_img) 
+   window = MainWindow("A:\Bilder")#"C:\Spiele\Karten\MagicTF 3.5.3\Cards\Booster Pack #3") 
    window.show()
    sys.exit(app.exec_())

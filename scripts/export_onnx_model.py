@@ -22,22 +22,18 @@ except ImportError:
 parser = argparse.ArgumentParser(
     description="Export the SAM prompt encoder and mask decoder to an ONNX model."
 )
-
 parser.add_argument(
     "--checkpoint", type=str, required=True, help="The path to the SAM model checkpoint."
 )
-
 parser.add_argument(
     "--output", type=str, required=True, help="The filename to save the ONNX model to."
 )
-
 parser.add_argument(
     "--model-type",
     type=str,
     required=True,
     help="In ['default', 'vit_h', 'vit_l', 'vit_b']. Which type of SAM model to export.",
 )
-
 parser.add_argument(
     "--return-single-mask",
     action="store_true",
@@ -47,14 +43,12 @@ parser.add_argument(
         "this can improve runtime when upscaling masks is expensive."
     ),
 )
-
 parser.add_argument(
     "--opset",
     type=int,
     default=17,
     help="The ONNX opset version to use. Must be >=11",
 )
-
 parser.add_argument(
     "--quantize-out",
     type=str,
@@ -64,7 +58,6 @@ parser.add_argument(
         "Quantization is performed with quantize_dynamic from onnxruntime.quantization.quantize."
     ),
 )
-
 parser.add_argument(
     "--gelu-approximate",
     action="store_true",
@@ -73,7 +66,6 @@ parser.add_argument(
         "for some runtimes that have slow or unimplemented erf ops, used in GELU."
     ),
 )
-
 parser.add_argument(
     "--use-stability-score",
     action="store_true",
@@ -82,7 +74,6 @@ parser.add_argument(
         "score calculated on the low resolution masks using an offset of 1.0. "
     ),
 )
-
 parser.add_argument(
     "--return-extra-metrics",
     action="store_true",
@@ -92,7 +83,6 @@ parser.add_argument(
         "significantly slower for high resolution outputs."
     ),
 )
-
 
 def run_export(
     model_type: str,
