@@ -1,5 +1,6 @@
+from math import e
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QMenu, QAction, QFileDialog, QComboBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QMenu, QAction, QFileDialog, QComboBox, QWidget
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QImage, QKeySequence
 from PyQt5.QtCore import Qt, QPoint, pyqtSignal
 
@@ -16,27 +17,44 @@ from PyQt5.QtCore import Qt, QPoint, pyqtSignal
 #     neg_points = coords[labels==0]
 #     ax.scatter(pos_points[:, 0], pos_points[:, 1], color='green', marker='*', s=marker_size, edgecolor='white', linewidth=1.25)
 #     ax.scatter(neg_points[:, 0], neg_points[:, 1], color='red', marker='*', s=marker_size, edgecolor='white', linewidth=1.25) 
+
 def cv_image_to_qimage(cv_image):
    height, width, channel = cv_image.shape
    bytes_per_line = 3 * width
    qimage = QImage(cv_image.data, width, height, bytes_per_line, QImage.Format_RGB888)
    return qimage
+def numpy_to_qpixmap(np_img):
+    if np_img.ndim == 3 and np_img.shape[2] == 3:
+        # For RGB images
+        h, w, ch = np_img.shape
+        bytes_per_line = 3 * w
+        q_img = QImage(np_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
+    elif np_img.ndim == 3 and np_img.shape[2] == 4:
+        # For RGBA images
+        h, w, ch = np_img.shape
+        bytes_per_line = 4 * w
+        q_img = QImage(np_img.data, w, h, bytes_per_line, QImage.Format_RGBA8888)
+    else:
+        raise ValueError("Unsupported image format")
+    return QPixmap.fromImage(q_img)
 
 class ImageWidget(QLabel):
    # Create a custom signal to emit the clicked point
    clickedPoint = pyqtSignal(QPoint)
    startSam = pyqtSignal()
 
-   def __init__(self, default_img):
+   def __init__(self, img_path):
       super().__init__()
       self.setAlignment(Qt.AlignCenter)
       self.setFocusPolicy(Qt.StrongFocus)  # Enable keyboard focus for the QLabel
 
       # Load an example image for demonstration
       try: 
-         self.image = QPixmap(default_img)
-      except: 
-         self.image=None
+         self.image = QPixmap(img_path)
+      except Exception as e: 
+         print(e.args)
+         return
+
       self.modified_image = self.image.copy()  # Create a copy to hold the modifications
       self.setPixmap(self.image)
 
@@ -125,19 +143,18 @@ class SamData():
       self.sam.to(device=self.device)
 
       self.predictor = SamPredictor(self.sam)      
-      self.load_image_CV(self.image_path)
+      self.encode_img(self.image_path)
          
-
-   def load_image_CV(self, image_path): 
+   # TODO
+   def encode_img(self, image_path): 
     image = cv2.imread(image_path)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) 
-   #  self.image = image # DS: only temp TODO: remove
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  
 
     # Pass loaded image through to predictor
     self.predictor.set_image(image)
    
    def predict_point_inputs(self, points):  
-      input_points_orig = np.array([[500, 375], [1125, 625]])
+      # input_points_orig = np.array([[500, 375], [1125, 625]])
       input_points = np.array(points) 
       # need shape (1, m, n)
       # input_points= np.expand_dims(input_points_dy, axis=0)
@@ -152,7 +169,20 @@ class SamData():
         ) 
       return (masks, scores) 
 
-
+# a widget without a parent is an independent window
+class SecondWindow(QWidget): 
+   def __init__(self): 
+      super().__init__()
+      self.w = 300
+      self.h= 400
+      self.resize(self.w , self.h)
+      self.setWindowOpacity(0.8) 
+      
+      self.image = np.zeros([512,512,3],dtype=np.uint8)
+      self.setStyleSheet('background-color: lightgreen') 
+       
+      self.image_widget = ImageWidget(self.image)      
+      self.setCentralWidget(numpy_to_qpixmap(self.image_widget))
 
 class MainWindow(QMainWindow):
    def __init__(self, default_folder= "C:/Users/zinst/Pictures"):
@@ -163,13 +193,19 @@ class MainWindow(QMainWindow):
          self.img_path = "sled.png"
       else: 
          self.img_path = os.path.join(self.img_folder, self.image_list[0]) 
+         self.img_path = os.path.join(self.img_folder, "sled.png") 
          self.index= 0
+
       self.initUI()
+
       # Connect the custom signal from ImageWidget to a slot in MainWindow
       self.image_widget.clickedPoint.connect(self.handle_clicked_point)
       self.image_widget.startSam.connect(self.segment_points)
       self.points=[]
-      self.samData=SamData( self.img_path) # input default image
+      self.samData=SamData(self.img_path) # input default image
+
+      # if a second window is necessary
+      self.sw= SecondWindow()
 
    def initUI(self):
       self.setWindowTitle("Image Viewer")
@@ -272,7 +308,7 @@ class MainWindow(QMainWindow):
          self.image_widget.image = QPixmap(file_path)
          self.image_widget.modified_image = self.image_widget.image.copy()  # Create a copy to hold the modifications
          self.image_widget.setPixmap(self.image_widget.image)
-         self.samData.load_image_CV(file_path)
+         self.samData.encode_img(file_path)
    def save_labels(self):
       pass
 
@@ -292,7 +328,7 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == "__main__":
-   app = QApplication(sys.argv)
-   window = MainWindow("A:\Bilder")#"C:\Spiele\Karten\MagicTF 3.5.3\Cards\Booster Pack #3") 
+   app = QApplication(sys.argv) 
+   window = MainWindow("A:\DS_repos\CvLabel") # MainWindow("A:\Bilder") 
    window.show()
    sys.exit(app.exec_())
