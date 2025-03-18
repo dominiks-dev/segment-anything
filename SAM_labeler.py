@@ -1,8 +1,9 @@
-from math import e
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QMenu, QAction, QFileDialog, QComboBox, QWidget
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QColor, QImage, QKeySequence
 from PyQt5.QtCore import Qt, QPoint, pyqtSignal
+
+from SAM_labler_data import SamData
 
 # def show_mask(mask, ax, random_color=False):
 #     if random_color:
@@ -12,6 +13,7 @@ from PyQt5.QtCore import Qt, QPoint, pyqtSignal
 #     h, w = mask.shape[-2:]
 #     mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
 #     ax.imshow(mask_image)
+
 # def show_points(coords, labels, ax, marker_size=375):
 #     pos_points = coords[labels==1]
 #     neg_points = coords[labels==0]
@@ -38,10 +40,13 @@ def numpy_to_qpixmap(np_img):
         raise ValueError("Unsupported image format")
     return QPixmap.fromImage(q_img)
 
+ 
+
 class ImageWidget(QLabel):
    # Create a custom signal to emit the clicked point
    clickedPoint = pyqtSignal(QPoint)
    startSam = pyqtSignal()
+   display_second_screen = pyqtSignal()
 
    def __init__(self, img_path):
       super().__init__()
@@ -100,6 +105,10 @@ class ImageWidget(QLabel):
 
       elif event.button() == Qt.MiddleButton: 
          self.startSam.emit()
+      
+      elif event.button() == Qt.RightButton: 
+         self.display_second_screen.emit()
+
 
    def keyPressEvent(self, event):
       if event.key() == Qt.Key_R:
@@ -110,8 +119,7 @@ class ImageWidget(QLabel):
          point = QPoint(-1, -1)
          self.clickedPoint.emit(point) 
 
-   def display_cv_image(self, cv_image):
-      
+   def display_cv_image(self, cv_image):      
       # Convert OpenCV image to QImage
       qimage = cv_image_to_qimage(cv_image)
 
@@ -119,93 +127,83 @@ class ImageWidget(QLabel):
       self.setPixmap(QPixmap.fromImage(qimage))
 
 
-from segment_anything import SamPredictor, sam_model_registry
 import numpy as np
-import torch # has to be outside of sam class
 import matplotlib.pyplot as plt
 import cv2 
-import os
-
-#TODO: refactor to seperate file
-class SamData(): 
-
-   def __init__(self, image_path) -> None:
-      self.sam_checkpoint = "sam_vit_b_01ec64.pth"  # min model 0.37gb
-      self.model_type = "vit_b"   
-      # check if there are images in the default path - if not load default 
-      if(image_path==None):
-         self.image_path = "sled.png"
-      else: 
-         self.image_path=image_path
-
-      self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-      self.sam = sam_model_registry[self.model_type](checkpoint=self.sam_checkpoint)
-      self.sam.to(device=self.device)
-
-      self.predictor = SamPredictor(self.sam)      
-      self.encode_img(self.image_path)
-         
-   # TODO
-   def encode_img(self, image_path): 
-    image = cv2.imread(image_path)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  
-
-    # Pass loaded image through to predictor
-    self.predictor.set_image(image)
-   
-   def predict_point_inputs(self, points):  
-      # input_points_orig = np.array([[500, 375], [1125, 625]])
-      input_points = np.array(points) 
-      # need shape (1, m, n)
-      # input_points= np.expand_dims(input_points_dy, axis=0)
-      # input_label = np.array([1, 1, 1])
-      if (len(input_points) == 0): 
-         return
-      input_label = np.ones(input_points.shape[0]) # only one class
-      masks, scores, logits = self.predictor.predict(
-         point_coords=input_points,
-         point_labels=input_label,
-         multimask_output=False, # only one mask if true
-        ) 
-      return (masks, scores) 
-
-# a widget without a parent is an independent window
+import os 
+""" 
 class SecondWindow(QWidget): 
-   def __init__(self): 
-      super().__init__()
-      self.w = 300
-      self.h= 400
-      self.resize(self.w , self.h)
-      self.setWindowOpacity(0.8) 
-      
-      self.image = np.zeros([512,512,3],dtype=np.uint8)
-      self.setStyleSheet('background-color: lightgreen') 
-       
-      self.image_widget = ImageWidget(self.image)      
-      self.setCentralWidget(numpy_to_qpixmap(self.image_widget))
+    def __init__(self): 
+        super().__init__()
+        self.w = 512
+        self.h = 512
+        self.resize(self.w, self.h)
+        self.setWindowOpacity(0.8) 
+        self.setStyleSheet('background-color: lightgreen') 
+        
+        # Create an image (black 512x512 RGB)
+        self.image = np.zeros([512, 512, 3], dtype=np.uint8)
+
+        # Convert the NumPy array to QPixmap
+        pixmap = numpy_to_qpixmap(self.image)
+
+        # Create a QLabel to display the image
+        self.image_label = QLabel(self)
+        self.image_label.setPixmap(pixmap)
+        self.image_label.setAlignment(Qt.AlignCenter)
+
+        # Set up the layout
+        layout = QVBoxLayout()
+        layout.addWidget(self.image_label)
+        self.setLayout(layout)
+
+        # Move the window to the second screen
+        self.move_to_second_screen()
+
+    def move_to_second_screen(self):
+        ### Moves the window to the second screen if available.
+        app = QApplication.instance()
+        screens = app.screens()  # Get all available screens
+        if len(screens) > 1:
+            second_screen = screens[1]  # Use the second screen
+            screen_geometry = second_screen.geometry()
+            x = screen_geometry.x() + (screen_geometry.width() - self.width()) // 2
+            y = screen_geometry.y() + (screen_geometry.height() - self.height()) // 2
+            self.move(x, y)
+        else:
+            print("Warning: No second screen detected, displaying on primary screen.")
+
+    def update_image(self, new_image):
+        ###Updates the displayed image dynamically.
+        pixmap = numpy_to_qpixmap(new_image)
+        self.image_label.setPixmap(pixmap)
+"""
 
 class MainWindow(QMainWindow):
-   def __init__(self, default_folder= "C:/Users/zinst/Pictures"):
+   def __init__(self, image_folder= "C:/Users/zinst/Pictures"):
       super().__init__()
-      self.img_folder = default_folder
+      self.img_folder = image_folder
       self.image_list = [f for f in os.listdir(self.img_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp'))]
+
       if (len(self.image_list) == 0): 
          self.img_path = "sled.png"
       else: 
          self.img_path = os.path.join(self.img_folder, self.image_list[0]) 
-         self.img_path = os.path.join(self.img_folder, "sled.png") 
          self.index= 0
 
       self.initUI()
-
-      # Connect the custom signal from ImageWidget to a slot in MainWindow
+      
+      # Connect the custom signals from ImageWidget to a slot in MainWindow
       self.image_widget.clickedPoint.connect(self.handle_clicked_point)
       self.image_widget.startSam.connect(self.segment_points)
+      # self.image_widget.display_second_screen.connect(self.display_img_second_screen) # 
       self.points=[]
-      self.samData=SamData(self.img_path) # input default image
+      self.samData=SamData(self.img_path) # input default image 
 
       # if a second window is necessary
-      self.sw= SecondWindow()
+      # self.sw= SecondWindow()
+      # self.sw.show() 
+      
 
    def initUI(self):
       self.setWindowTitle("Image Viewer")
@@ -257,8 +255,14 @@ class MainWindow(QMainWindow):
       menubar.setCornerWidget(dropdown_menu)
 
       # Create a context menu for the image widget
-      self.image_widget.setContextMenuPolicy(Qt.CustomContextMenu)
-      self.image_widget.customContextMenuRequested.connect(self.show_context_menu)
+      # self.image_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+      # self.image_widget.customContextMenuRequested.connect(self.show_context_menu)
+
+
+   def display_img_second_screen(self): 
+      # self.sw.update_image(new_numpy_image)
+      pass
+
 
    def handle_clicked_point(self, point):
       # Receive the clicked point from ImageWidget and do something with it
@@ -280,7 +284,10 @@ class MainWindow(QMainWindow):
       # merge mask and original image
       alpha = 0.6
       beta = (1.0 - alpha) 
-      im2 = self.samData.image
+       
+      image = cv2.imread(self.img_path)
+      image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  
+
       # color = np.array([30/255, 144/255, 255/255, 0.6])
       # # h, w = mask['segmentation'].shape[-2:]
       # h, w = mask.shape[-2:]
@@ -291,15 +298,17 @@ class MainWindow(QMainWindow):
       height, width = mask.shape
 
       # Create an empty 3-channel image
-      orange_color_image = np.zeros((height, width, 3), dtype=np.uint8)
+      orange_mask_img = np.zeros((height, width, 3), dtype=np.uint8)
 
       # Set the orange color (in BGR format) in the regions where the mask is True
       # orange_color_image[mask] = (0, 165, 255) 
-      orange_color_image[mask] = (255, 165, 0) # in rgb
+      orange_mask_img[mask] = (255, 165, 0) # in rgb
 
-      cv_image = cv2.addWeighted(orange_color_image, alpha, im2, beta, 0.0)
+      cv_image = cv2.addWeighted(orange_mask_img, alpha, image, beta, 0.0)
       # pass the mask to the image display 
       self.image_widget.display_cv_image(cv_image)
+      # self.sw.update_image(cv_image)
+
 
    def load_image(self):
       options = QFileDialog.Options()
@@ -312,14 +321,6 @@ class MainWindow(QMainWindow):
    def save_labels(self):
       pass
 
-   def show_context_menu(self, pos):
-      context_menu = QMenu(self)
-      context_menu.addAction("Action 1")
-      context_menu.addAction("Action 2")
-      context_menu.addAction("Action 3")
-
-      action = context_menu.exec_(self.image_widget.mapToGlobal(pos))
-
    def handle_dropdown_selection(self):
       action = self.sender()
       if action:
@@ -329,6 +330,7 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
    app = QApplication(sys.argv) 
-   window = MainWindow("A:\DS_repos\CvLabel") # MainWindow("A:\Bilder") 
+   window = MainWindow('C:/Users/Anwender/Desktop/2025_03_06_Becher_sorted/Flash') # MainWindow("A:\Bilder") 
    window.show()
+   
    sys.exit(app.exec_())
